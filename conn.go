@@ -245,6 +245,7 @@ type Conn struct {
 
 	// Write fields
 	mu            chan struct{} // used as mutex to protect write to conn
+	mutex         sync.Mutex
 	writeBuf      []byte        // frame is constructed in this buffer.
 	writePool     BufferPool
 	writeBufSize  int
@@ -662,17 +663,10 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
 
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
-
+	c.mutex.Lock()
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
 
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
+	c.mutex.Unlock()
 
 	if err != nil {
 		return w.endMessage(err)
